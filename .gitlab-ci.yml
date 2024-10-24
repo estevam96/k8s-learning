@@ -1,11 +1,59 @@
 stages:
   - test
+  - build
+  - deploy
 
-realizar_testes:
+variables:
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  DOCKER_IMAGE_TAG_LATEST: $CI_REGISTRY_IMAGE:latest
+
+integration-tests:
   stage: test
-  image: node:20.7.0-alpine3.17
+  image: node:20-alpine
   before_script:
     - cd app/
     - npm install
   script:
     - npm test
+  artifacts:
+    when: always
+    reports:
+      junit: app/junit.xml
+
+build-publish-images:
+  stage: build
+  needs:
+    - integration-tests
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
+
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+
+  script:
+    - docker build -t $DOCKER_IMAGE_TAG .
+    - docker tag $DOCKER_IMAGE_TAG $DOCKER_IMAGE_TAG_LATEST
+    - docker push $DOCKER_IMAGE_TAG
+    - docker push $DOCKER_IMAGE_TAG_LATEST
+
+deploy-gke:
+  stage: deploy
+  needs:
+    - build-publish-images
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+  services:
+    - docker:20.10.16-dind
+  script:
+    - echo $GCP_SERVICE_KEY > gcloud-service-key.json
+    - gcloud auth activate-service-account --key-file gcloud-service-key.json
+    - gcloud config set project $GCP_PROJECT_ID
+    - gcloud components install gke-gcloud-auth-plugin
+    - gcloud container clusters get-credentials $GKE_CLUSTER_NAME --region=$GKE_COMPUTE_REGION
+    - sed -i -r "s/#IMAGE_TAG#/$DOCKER_IMAGE_TAG/g" deployment.yml
+    - kubectl -f deployment.yml
