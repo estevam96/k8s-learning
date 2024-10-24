@@ -26,12 +26,10 @@ spec:
   template:
     metadata:
       app: app
-  spec: 
+  spec:
     containers:
     - name: app
-    image: denilsonbonatti/gitlab-cicd-node:1.0
+    image: #IMAGE_TAG#
     imagePullPolice: Always
-    ports: 
+    ports:
     - containerPort: 3000
-
-

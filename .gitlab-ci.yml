@@ -3,9 +3,14 @@ stages:
   - build
   - deploy
 
-realizar_testes:
+variables:
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  DOCKER_IMAGE_TAG_LATEST: $CI_REGISTRY_IMAGE:latest
+
+integration-tests:
   stage: test
-  image: node:17-alpine3.14
+  image: node:20-alpine
   before_script:
     - cd app/
     - npm install
@@ -14,31 +19,41 @@ realizar_testes:
   artifacts:
     when: always
     reports:
-        junit: app/junit.xml
-  
-build_images:
+      junit: app/junit.xml
+
+build-publish-images:
   stage: build
   needs:
-    - realizar_testes
+    - integration-tests
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   image: docker:20.10.16
   services:
     - docker:20.10.16-dind
-  
-  variables:
-    DOCKER_TLS_CERTDIR: "/certs"
-  
-  before_script:
-    - docker login -u $REGISTRY_USER -p $REGISTRY_PASS
-  
-  script:
-    - docker build -t denilsonbonatti/gitlab-cicd-node:1.0 .
-    - docker push denilsonbonatti/gitlab-cicd-node:1.0
 
-deploy_dev:
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+
+  script:
+    - docker build -t $DOCKER_IMAGE_TAG .
+    - docker tag $DOCKER_IMAGE_TAG $DOCKER_IMAGE_TAG_LATEST
+    - docker push $DOCKER_IMAGE_TAG
+    - docker push $DOCKER_IMAGE_TAG_LATEST
+
+deploy-gke:
   stage: deploy
   needs:
-    - build_images
-  before_script:
-    - chmod 400 $SSH_KEY
+    - build-publish-images
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+  services:
+    - docker:20.10.16-dind
   script:
-    - ssh -o StrictHostKeyChecking=no -i $SSH_KEY gcp@35.198.57.187 "sudo rm * -Rf sudo git clone --branch kubernetes https://gitlab.com/denilsonbonatti/gitlab-cicd-app-base.git && cd gitlab-cicd-app-base && kubectl -f deployment.yml"
+    - echo $GCP_SERVICE_KEY > gcloud-service-key.json
+    - gcloud auth activate-service-account --key-file gcloud-service-key.json
+    - gcloud config set project $GCP_PROJECT_ID
+    - gcloud components install gke-gcloud-auth-plugin
+    - gcloud container clusters get-credentials $GKE_CLUSTER_NAME --region=$GKE_COMPUTE_REGION
+    - sed -i -r "s/#IMAGE_TAG#/$DOCKER_IMAGE_TAG/g" deployment.yml
+    - kubectl -f deployment.yml
