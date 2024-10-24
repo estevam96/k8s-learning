@@ -15,6 +15,7 @@ integration-tests:
     - cd app/
     - npm install
   script:
+    - npm run lint
     - npm test
   artifacts:
     when: always
