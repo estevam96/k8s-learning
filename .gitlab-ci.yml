@@ -8,7 +8,7 @@ variables:
   DOCKER_IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
   DOCKER_IMAGE_TAG_LATEST: $CI_REGISTRY_IMAGE:latest
 
-integration-tests:
+unittests:
   stage: test
   image: node:20-alpine
   before_script:
@@ -25,7 +25,7 @@ integration-tests:
 build-publish-images:
   stage: build
   needs:
-    - integration-tests
+    - unittests
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
   image: docker:20.10.16
