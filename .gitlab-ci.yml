@@ -5,7 +5,7 @@ stages:
 
 realizar_testes:
   stage: test
-  image: node:17-alpine3.14
+  image: node:20.7.0-alpine3.17
   before_script:
     - cd app/
     - npm install
@@ -20,9 +20,9 @@ build_images:
   stage: build
   needs:
     - realizar_testes
-  image: docker:20.10.16
+  image: docker:latest
   services:
-    - docker:20.10.16-dind
+    - docker:dind
   
   variables:
     DOCKER_TLS_CERTDIR: "/certs"
@@ -31,14 +31,17 @@ build_images:
     - docker login -u $REGISTRY_USER -p $REGISTRY_PASS
   
   script:
-    - docker build -t denilsonbonatti/gitlab-cicd-node:1.0 .
-    - docker push denilsonbonatti/gitlab-cicd-node:1.0
+    - docker build -t gitlab-cicd-node .
+    - docker tag gitlab-cicd-node jadson.sousamattos/gitlab-cicd-node:1.0
+    - docker push jadson.sousamattos/gitlab-cicd-node:1.0
 
 deploy_dev:
   stage: deploy
+  image: docker:latest
+  services: docker:dind
   needs:
     - build_images
   tags:
     - gcp
   script:
-    - docker run -d --name nodeapp -p 3000:3000 denilsonbonatti/gitlab-cicd-node:1.0
+    - docker run -d --name nodeapp -p 3000:3000 jadson.sousamattos/gitlab-cicd-node:1.0
