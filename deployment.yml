@@ -25,11 +25,13 @@ spec:
       app: app
   template:
     metadata:
-      app: app
+      labels:
+        app: app
   spec: 
     containers:
     - name: app
-    image: denilsonbonatti/gitlab-cicd-node:1.0
+    image: jadson.sousamattos/gitlab-cicd-node:1.0
+    # image: gcr.io/$GCP_PROJECT_ID/gitlab-cicd-node
     imagePullPolice: Always
     ports: 
     - containerPort: 3000

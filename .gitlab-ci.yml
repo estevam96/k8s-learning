@@ -5,7 +5,7 @@ stages:
 
 realizar_testes:
   stage: test
-  image: node:17-alpine3.14
+  image: node:20.7.0-alpine3.17
   before_script:
     - cd app/
     - npm install
@@ -20,9 +20,10 @@ build_images:
   stage: build
   needs:
     - realizar_testes
-  image: docker:20.10.16
+  image: docker:latest
+  # image: google/cloud-sdk:latest
   services:
-    - docker:20.10.16-dind
+    - docker:dind
   
   variables:
     DOCKER_TLS_CERTDIR: "/certs"
@@ -31,8 +32,8 @@ build_images:
     - docker login -u $REGISTRY_USER -p $REGISTRY_PASS
   
   script:
-    - docker build -t denilsonbonatti/gitlab-cicd-node:1.0 .
-    - docker push denilsonbonatti/gitlab-cicd-node:1.0
+    - docker build -t jadson.sousamattos/gitlab-cicd-node:1.0 .
+    - docker push jadson.sousamattos/gitlab-cicd-node:1.0
 
 deploy_dev:
   stage: deploy
@@ -42,3 +43,8 @@ deploy_dev:
     - chmod 400 $SSH_KEY
   script:
     - ssh -o StrictHostKeyChecking=no -i $SSH_KEY gcp@35.198.57.187 "sudo rm * -Rf sudo git clone --branch kubernetes https://gitlab.com/denilsonbonatti/gitlab-cicd-app-base.git && cd gitlab-cicd-app-base && kubectl -f deployment.yml"
+    # - echo $GCP_KEY_FILE | base64 -d > ${CI_PROJECT_DIR}/key-file.json
+    # - gcloud auth activate-service-account --key-file=${CI_PROJECT_DIR}/key-file.json
+    # - gcloud config set project $GCP_PROEJCT_ID
+    # - gcloud container clusters get-credentials $GCP_CLUSTER_NAME --zone $GCP_CLUSTER_ZONE --project $GCP_PROJECT_ID
+    # - kubectl aply-f kubernetes-deployment.yaml
